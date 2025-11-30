@@ -2,10 +2,19 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 )
+
+// ============== In-Memory Store ==============
+
+var store = make(map[string]string)
+var mu sync.RWMutex
+
+// ============== Response Helpers ==============
 
 type Response struct {
 	Success bool   `json:"success"`
@@ -20,21 +29,42 @@ func sendJSON(w http.ResponseWriter, statusCode int, data Response) {
 	json.NewEncoder(w).Encode(data)
 }
 
-var store = make(map[string]string)
-var mu sync.RWMutex
+// ============== KV Handler ==============
 
-// GET /get?key=mykey - Retrieve a value
-func getHandler(w http.ResponseWriter, r *http.Request) {
-	key := r.URL.Query().Get("key")
+// kvHandler handles all /kv/{key} requests
+// GET    /kv/{key}         - retrieve value
+// PUT    /kv/{key}         - store value (body = value)
+// DELETE /kv/{key}         - delete key
+func kvHandler(w http.ResponseWriter, r *http.Request) {
+	// Extract key from URL path: /kv/{key}
+	key := strings.TrimPrefix(r.URL.Path, "/kv/")
+	log.Println("Received", r.Method, "request for key:", key)
 
 	if key == "" {
 		sendJSON(w, http.StatusBadRequest, Response{
 			Success: false,
-			Message: "key is required",
+			Message: "key is required in path: /kv/{key}",
 		})
 		return
 	}
 
+	switch r.Method {
+	case http.MethodGet:
+		handleGet(w, key)
+	case http.MethodPut:
+		handlePut(w, r, key)
+	case http.MethodDelete:
+		handleDelete(w, key)
+	default:
+		sendJSON(w, http.StatusMethodNotAllowed, Response{
+			Success: false,
+			Message: "method not allowed, use GET, PUT, or DELETE",
+		})
+	}
+}
+
+// GET - retrieve a value
+func handleGet(w http.ResponseWriter, key string) {
 	mu.RLock()
 	value, exists := store[key]
 	mu.RUnlock()
@@ -56,18 +86,17 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GET /put?key=mykey&value=myvalue - Store a value
-func putHandler(w http.ResponseWriter, r *http.Request) {
-	key := r.URL.Query().Get("key")
-	value := r.URL.Query().Get("value")
-
-	if key == "" || value == "" {
+// PUT - store a value
+func handlePut(w http.ResponseWriter, r *http.Request, key string) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil || len(body) == 0 {
 		sendJSON(w, http.StatusBadRequest, Response{
 			Success: false,
-			Message: "key and value are required",
+			Message: "value is required in request body",
 		})
 		return
 	}
+	value := string(body)
 
 	mu.Lock()
 	store[key] = value
@@ -81,18 +110,8 @@ func putHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GET /delete?key=mykey - Delete a value
-func deleteHandler(w http.ResponseWriter, r *http.Request) {
-	key := r.URL.Query().Get("key")
-
-	if key == "" {
-		sendJSON(w, http.StatusBadRequest, Response{
-			Success: false,
-			Message: "key is required",
-		})
-		return
-	}
-
+// DELETE - delete a key
+func handleDelete(w http.ResponseWriter, key string) {
 	mu.Lock()
 	_, exists := store[key]
 	if !exists {
@@ -114,19 +133,15 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func mainHandler(w http.ResponseWriter, r *http.Request) {
-	sendJSON(w, http.StatusOK, Response{
-		Success: true,
-		Message: "Welcome to the KV store",
-	})
-}
+// ============== Main ==============
 
 func main() {
-	http.HandleFunc("/", mainHandler)
-	http.HandleFunc("/get", getHandler)
-	http.HandleFunc("/put", putHandler)
-	http.HandleFunc("/delete", deleteHandler)
+	http.HandleFunc("/kv/", kvHandler)
 
-	log.Println("KV store Running on http://localhost:8080")
+	log.Println("KV Store running on http://localhost:8080")
+	log.Println("Usage:")
+	log.Println("  PUT    curl -X PUT -d 'value' http://localhost:8080/kv/mykey")
+	log.Println("  GET    curl http://localhost:8080/kv/mykey")
+	log.Println("  DELETE curl -X DELETE http://localhost:8080/kv/mykey")
 	http.ListenAndServe(":8080", nil)
 }
