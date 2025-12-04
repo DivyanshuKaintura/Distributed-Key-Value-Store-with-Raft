@@ -40,6 +40,16 @@ func HandlePut(w http.ResponseWriter, r *http.Request, key string) {
 	}
 	value := string(body)
 
+	// write to write ahead log
+	err = WriteAheadLog("PUT", key, value)
+	if err != nil {
+		SendJSON(w, http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "failed to write to log",
+		})
+		return
+	}
+
 	mu.Lock()
 	store[key] = value
 	mu.Unlock()
@@ -68,6 +78,17 @@ func HandleDelete(w http.ResponseWriter, key string) {
 		})
 		return
 	}
+
+	// write to write ahead log
+	err := WriteAheadLog("DELETE", key, "")
+	if err != nil {
+		SendJSON(w, http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "failed to write to log",
+		})
+		return
+	}
+
 	delete(store, key)
 	mu.Unlock()
 

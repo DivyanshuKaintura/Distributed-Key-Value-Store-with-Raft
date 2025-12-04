@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 )
@@ -58,9 +59,18 @@ func kvHandler(w http.ResponseWriter, r *http.Request) {
 // ============== Main ==============
 
 func main() {
+
+	if len(os.Args) > 1 && os.Args[1] == "recover" {
+		err := RecoverFromWAL()
+		if err != nil {
+			log.Fatalf("Failed to Recover WAL: %v", err)
+		}
+		log.Println("WAL recovered successfully")
+		return
+	}
+
 	// Load existing data from disk on startup
 	LoadFromDisk()
-
 	http.HandleFunc("/kv/", kvHandler)
 
 	log.Println("KV Store running on http://localhost:8080")
