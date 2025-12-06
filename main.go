@@ -71,6 +71,11 @@ func main() {
 
 	// Load existing data from disk on startup
 	LoadFromDisk()
+
+	// Automatic crash recovery
+	// Replay WAL to recover any operations since last save
+	// ReplayWAL()
+
 	http.HandleFunc("/kv/", kvHandler)
 
 	log.Println("KV Store running on http://localhost:8080")
