@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 // ============== In-Memory Store ==============
@@ -76,9 +77,14 @@ func main() {
 	// Replay WAL to recover any operations since last save
 	// ReplayWAL()
 
-	http.HandleFunc("/kv/", kvHandler)
+	// Apply timeout middleware to KV handler
+	// Set timeout to 5 seconds
+	// For distributed systems, this should be < than client retry timeout
+	timeoutDuration := 5 * time.Second
+	http.HandleFunc("/kv/", TimeoutMiddleware(timeoutDuration)(kvHandler))
 
 	log.Println("KV Store running on http://localhost:8080")
+	log.Println("Request timeout set to:", timeoutDuration)
 	log.Println("Usage:")
 	log.Println("  PUT    curl -X PUT -d 'value' http://localhost:8080/kv/mykey")
 	log.Println("  GET    curl http://localhost:8080/kv/mykey")
