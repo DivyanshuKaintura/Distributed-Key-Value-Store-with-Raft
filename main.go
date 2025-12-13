@@ -83,11 +83,15 @@ func main() {
 	timeoutDuration := 5 * time.Second
 	http.HandleFunc("/kv/", TimeoutMiddleware(timeoutDuration)(kvHandler))
 
+	// Health check endpoint - used by load balancers, k8s, monitoring
+	http.HandleFunc("/health", HealthCheckHandler)
+
 	log.Println("KV Store running on http://localhost:8080")
 	log.Println("Request timeout set to:", timeoutDuration)
-	log.Println("Usage:")
-	log.Println("  PUT    curl -X PUT -d 'value' http://localhost:8080/kv/mykey")
-	log.Println("  GET    curl http://localhost:8080/kv/mykey")
-	log.Println("  DELETE curl -X DELETE http://localhost:8080/kv/mykey")
+	log.Println("Endpoints:")
+	log.Println("  Health Check: curl http://localhost:8080/health")
+	log.Println("  PUT:          curl -X PUT -d 'value' http://localhost:8080/kv/mykey")
+	log.Println("  GET:          curl http://localhost:8080/kv/mykey")
+	log.Println("  DELETE:       curl -X DELETE http://localhost:8080/kv/mykey")
 	http.ListenAndServe(":8080", nil)
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -60,10 +61,7 @@ func TimeoutMiddleware(timeout time.Duration) func(http.HandlerFunc) http.Handle
 				// Handler completed in time
 				if handlerPanicked {
 					// Handler panicked, return 500
-					SendJSON(w, http.StatusInternalServerError, Response{
-						Success: false,
-						Message: "internal server error",
-					})
+					SendError(w, ErrInternalServer, "internal server error", "", "handler panicked")
 				}
 				// Otherwise, handler already wrote response, we're done
 				return
@@ -72,14 +70,10 @@ func TimeoutMiddleware(timeout time.Duration) func(http.HandlerFunc) http.Handle
 				// Timeout occurred!
 				// The context was cancelled due to timeout
 				log.Printf("Request timeout for %s %s", r.Method, r.URL.Path)
-				
-				// Return 408 Request Timeout
-				// Note: The handler goroutine is still running but its context is cancelled
-				// Properly written handlers should check ctx.Done() and stop work
-				SendJSON(w, http.StatusRequestTimeout, Response{
-					Success: false,
-					Message: "request timeout exceeded",
-				})
+
+				// Return 408 Request Timeout with structured error
+				SendError(w, ErrRequestTimeout, "request exceeded timeout limit", "",
+					fmt.Sprintf("timeout: %v", timeout))
 				return
 			}
 		}
@@ -102,6 +96,6 @@ func ExampleContextAwareOperation(ctx context.Context) error {
 
 	// Do your work here...
 	// For long operations, check ctx.Done() in a loop
-	
+
 	return nil
 }
