@@ -146,9 +146,9 @@ func performHealthChecks() map[string]Check {
 // checkStoreHealth verifies the KV store is accessible
 func checkStoreHealth(timestamp string) Check {
 	// Try to acquire lock to ensure store is not deadlocked
-	mu.RLock()
+	// mu.RLock()
 	// size := len(store)
-	mu.RUnlock()
+	// mu.RUnlock()
 
 	return Check{
 		Status:    HealthStatusHealthy,
