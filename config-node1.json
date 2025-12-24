@@ -1,0 +1,13 @@
+{
+  "node_id": "node1",
+  "http_port": 8080,
+  "grpc_port": 50051,
+  "peers": [
+    {"id": "node2", "address": "localhost:50052"},
+    {"id": "node3", "address": "localhost:50053"}
+  ],
+  "data_dir": "./data/node1",
+  "election_timeout_min": 150,
+  "election_timeout_max": 300,
+  "heartbeat_interval": 50
+}

@@ -12,6 +12,13 @@ func SendJSON(w http.ResponseWriter, statusCode int, data Response) {
 	json.NewEncoder(w).Encode(data)
 }
 
+// SendJSONAny sends any data as JSON response
+func SendJSONAny(w http.ResponseWriter, statusCode int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(data)
+}
+
 // SendJSONError sends a structured error response
 func SendJSONError(w http.ResponseWriter, statusCode int, data ErrorResponse) {
 	w.Header().Set("Content-Type", "application/json")
