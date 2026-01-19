@@ -940,11 +940,11 @@ curl http://localhost:8080/kv/newkey
 |------|--------|-------|
 | Step 1: Proto Definitions | ✅ Complete | proto/raft.proto created with AppendEntries, RequestVote, InstallSnapshot RPCs |
 | Step 2: gRPC Server | ✅ Complete | raft/grpc_server.go and raft/node.go created with RPC handlers |
-| Step 3: Cluster Config | ✅ Complete | config/config.go and sample config files for 3-node cluster | |
-| Step 4: Raft State Machine | ⬜ Not Started | |
+| Step 3: Cluster Config | ✅ Complete | config/config.go and sample config files for 3-node cluster |
+| Step 4: Raft State Machine | ✅ Complete | raft/node.go, raft/log.go, raft/persistence.go with full election, heartbeat, and replication logic |
 | Step 5: Dual-Server Startup | ⬜ Not Started | |
 | Step 6: Write Forwarding | ⬜ Not Started | |
 
 ---
 
-*Last Updated: December 23, 2025*
+*Last Updated: January 19, 2026*

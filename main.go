@@ -91,8 +91,15 @@ func main() {
 		log.Fatalf("Failed to create data directory: %v", err)
 	}
 
-	// Initialize Raft node
-	raftNode = raft.NewRaftNode(cfg.NodeID)
+	// Create apply channel for committed entries
+	applyCh := make(chan raft.ApplyMsg, 100)
+
+	// Initialize Raft node with full configuration
+	var raftErr error
+	raftNode, raftErr = raft.NewRaftNodeFromConfig(cfg, applyCh)
+	if raftErr != nil {
+		log.Fatalf("Failed to initialize Raft node: %v", raftErr)
+	}
 	log.Printf("Raft node initialized: %s", cfg.NodeID)
 
 	// Start gRPC server for peer communication
@@ -101,6 +108,13 @@ func main() {
 		log.Fatalf("Failed to start gRPC server: %v", err)
 	}
 	defer grpcServer.Stop()
+
+	// Start Raft state machine (elections, heartbeats, etc.)
+	raftNode.Start()
+	defer raftNode.Stop()
+
+	// Start goroutine to apply committed entries to KV store
+	go applyCommittedEntries(applyCh)
 
 	// Load existing data from disk on startup
 	LoadFromDisk()
@@ -128,6 +142,48 @@ func main() {
 
 	if err := http.ListenAndServe(httpAddr, nil); err != nil {
 		log.Fatalf("HTTP server error: %v", err)
+	}
+}
+
+// applyCommittedEntries listens for committed entries and applies them to the KV store
+func applyCommittedEntries(applyCh chan raft.ApplyMsg) {
+	for msg := range applyCh {
+		if !msg.CommandValid {
+			continue
+		}
+
+		log.Printf("[Apply] Applying committed entry: index=%d, command=%s", msg.CommandIndex, msg.Command)
+
+		// Parse command (format: "PUT|key|value" or "DELETE|key")
+		parts := strings.SplitN(msg.Command, "|", 3)
+		if len(parts) < 2 {
+			log.Printf("[Apply] Invalid command format: %s", msg.Command)
+			continue
+		}
+
+		operation := parts[0]
+		key := parts[1]
+
+		mu.Lock()
+		switch operation {
+		case "PUT":
+			if len(parts) == 3 {
+				value := parts[2]
+				store[key] = value
+				log.Printf("[Apply] PUT %s = %s", key, value)
+			}
+		case "DELETE":
+			delete(store, key)
+			log.Printf("[Apply] DELETE %s", key)
+		default:
+			log.Printf("[Apply] Unknown operation: %s", operation)
+		}
+		mu.Unlock()
+
+		// Persist to disk after applying
+		if err := SaveToDisk(); err != nil {
+			log.Printf("[Apply] Warning: failed to save to disk: %v", err)
+		}
 	}
 }
 
