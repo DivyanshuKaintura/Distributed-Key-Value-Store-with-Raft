@@ -942,7 +942,7 @@ curl http://localhost:8080/kv/newkey
 | Step 2: gRPC Server | ✅ Complete | raft/grpc_server.go and raft/node.go created with RPC handlers |
 | Step 3: Cluster Config | ✅ Complete | config/config.go and sample config files for 3-node cluster |
 | Step 4: Raft State Machine | ✅ Complete | raft/node.go, raft/log.go, raft/persistence.go with full election, heartbeat, and replication logic |
-| Step 5: Dual-Server Startup | ⬜ Not Started | |
+| Step 5: Dual-Server Startup | ✅ Complete | main.go refactored with signal handling, graceful shutdown, and proper goroutine management |
 | Step 6: Write Forwarding | ⬜ Not Started | |
 
 ---
