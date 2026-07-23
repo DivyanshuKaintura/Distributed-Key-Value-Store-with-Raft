@@ -153,7 +153,7 @@ func main() {
 	log.Printf("[Shutdown] Received signal: %v", sig)
 
 	// ==================== SHUTDOWN SEQUENCE ====================
-	performGracefulShutdown(httpServer, grpcServer, raftNode)
+	performGracefulShutdown(httpServer, grpcServer, raftNode, applyCh)
 }
 
 // setupHTTPServer creates and configures the HTTP server
@@ -182,7 +182,7 @@ func setupHTTPServer(addr string) *http.Server {
 }
 
 // performGracefulShutdown handles the shutdown sequence gracefully
-func performGracefulShutdown(httpServer *http.Server, grpcServer *raft.RaftGRPCServer, raftNode *raft.RaftNode) {
+func performGracefulShutdown(httpServer *http.Server, grpcServer *raft.RaftGRPCServer, raftNode *raft.RaftNode, applyCh chan raft.ApplyMsg) {
 	log.Println("[Shutdown] Starting graceful shutdown sequence...")
 
 	// Step 1: Stop accepting new HTTP requests
@@ -204,6 +204,12 @@ func performGracefulShutdown(httpServer *http.Server, grpcServer *raft.RaftGRPCS
 	log.Println("[Shutdown] Stopping Raft state machine...")
 	raftNode.Stop()
 	log.Println("[Shutdown] Raft state machine stopped")
+
+	// Step 3.5: Close apply channel so applier goroutine can exit
+	if applyCh != nil {
+		close(applyCh)
+		log.Println("[Shutdown] applyCh closed")
+	}
 
 	// Step 4: Final data persistence
 	log.Println("[Shutdown] Persisting final state...")

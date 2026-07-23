@@ -3,6 +3,8 @@ package main
 import (
 	"io"
 	"net/http"
+
+	"github.com/DivyanshuKaintura/Distributed-Key-Value-Store-with-Raft/raft"
 )
 
 // GET - retrieve a value
@@ -62,22 +64,41 @@ func HandlePut(w http.ResponseWriter, r *http.Request, key string) {
 		return
 	}
 
-	// write to write ahead log
-	err = WriteAheadLog("PUT", key, value)
-	if err != nil {
+	// Ensure we're the leader; if not, instruct client to retry at leader
+	if raftNode == nil || !raftNode.IsLeader() {
+		leaderID := ""
+		if raftNode != nil {
+			leaderID = raftNode.GetLeaderID()
+		}
+		if leaderID == "" {
+			RecordError()
+			SendError(w, ErrServiceUnavailable, "no leader elected", key, "")
+			return
+		}
 		RecordError()
-		LogError(ErrWALWriteFailed, "WAL write failed", key, err)
-		SendError(w, ErrWALWriteFailed, "failed to write to write-ahead log", key, err.Error())
+		SendError(w, ErrNotLeader, "not leader", key, leaderID)
 		return
 	}
 
-	mu.Lock()
-	store[key] = value
-	mu.Unlock()
+	// Propose the command to Raft (will be persisted and replicated)
+	cmd := "PUT|" + key + "|" + value
+	_, err = raftNode.Propose(cmd)
+	if err != nil {
+		RecordError()
+		switch err {
+		case raft.ErrNotLeader:
+			leaderID := raftNode.GetLeaderID()
+			SendError(w, ErrNotLeader, "not leader", key, leaderID)
+		case raft.ErrTimeout:
+			SendError(w, ErrRequestTimeout, "replication timeout", key, err.Error())
+		default:
+			LogError(ErrInternalServer, "proposal failed", key, err)
+			SendError(w, ErrInternalServer, "proposal failed", key, err.Error())
+		}
+		return
+	}
 
-	// Save to disk after storing
-	SaveToDisk()
-
+	// Success — the entry was committed and will be applied by applier
 	RecordSuccess()
 	SendSuccess(w, "value stored successfully", key, value)
 }
@@ -102,22 +123,43 @@ func HandleDelete(w http.ResponseWriter, key string) {
 		return
 	}
 
-	// write to write ahead log
-	err := WriteAheadLog("DELETE", key, "")
-	if err != nil {
+	// Ensure we're the leader; if not, instruct client to retry at leader
+	if raftNode == nil || !raftNode.IsLeader() {
 		mu.Unlock()
+		leaderID := ""
+		if raftNode != nil {
+			leaderID = raftNode.GetLeaderID()
+		}
+		if leaderID == "" {
+			RecordError()
+			SendError(w, ErrServiceUnavailable, "no leader elected", key, "")
+			return
+		}
 		RecordError()
-		LogError(ErrWALWriteFailed, "WAL write failed", key, err)
-		SendError(w, ErrWALWriteFailed, "failed to write to write-ahead log", key, err.Error())
+		SendError(w, ErrNotLeader, "not leader", key, leaderID)
 		return
 	}
 
-	delete(store, key)
+	// Propose delete command to Raft
+	cmd := "DELETE|" + key
+	_, err := raftNode.Propose(cmd)
+	if err != nil {
+		mu.Unlock()
+		RecordError()
+		switch err {
+		case raft.ErrNotLeader:
+			leaderID := raftNode.GetLeaderID()
+			SendError(w, ErrNotLeader, "not leader", key, leaderID)
+		case raft.ErrTimeout:
+			SendError(w, ErrRequestTimeout, "replication timeout", key, err.Error())
+		default:
+			LogError(ErrInternalServer, "proposal failed", key, err)
+			SendError(w, ErrInternalServer, "proposal failed", key, err.Error())
+		}
+		return
+	}
+
 	mu.Unlock()
-
-	// Save to disk after deleting
-	SaveToDisk()
-
 	RecordSuccess()
 	SendSuccess(w, "key deleted successfully", key, "")
 }
